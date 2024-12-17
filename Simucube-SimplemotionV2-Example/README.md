@@ -1,71 +1,85 @@
 # Simucube SimpleMotionV2 Examples
 
-This folder contains two example projects demonstrating how to interface with Simucube motor controllers using the SimpleMotion V2 API. Each example highlights specific functionalities and control features of the Simucube system.
+This folder contains two example projects that demonstrate how to interface with Simucube motor controllers. Both examples showcase different functionalities of the Simucube system using the Granite Devices SimpleMotion V2 library.
+
+---
+
+## Requirements and Setup
+
+- **Powering the Simucube**: Ensure the Simucube is powered on with the DIP switches in their normal positions.
+- **USB Connections**:
+  - The **Simucube-Ioni-Activate** example requires a USB connection to the **X3 port**.
+  - The **SimplemotionV2-Speed-Setpoint** example requires a USB connection to the **X4 port**.
+  - Both USB connections can be made simultaneously.
 
 ---
 
 ## Projects
 
-### 1. **SimplemotionV2-Speed-Setpoint**
-- **Description:**
-  Demonstrates how to control the motor's velocity using the SimpleMotion V2 library. The program sets the control mode to velocity and sends a speed setpoint to spin the motor.
+### 1. **Simucube-Ioni-Activate**
+- **Description**:  
+  This example puts the Simucube controller into **IONI configuration mode** via USB (connected to the X3 port). This is a required step to enable control of the motor drive using the SimpleMotion V2 library.
 
-- **Key Features:**
-  - Connects to the motor controller via SimpleMotion V2.
-  - Reads and checks fault status.
-  - Enables the motor drive.
-  - Sets the control mode to velocity.
-  - Sends a velocity setpoint (e.g., 500) and observes the motor spinning.
-  - Stops the motor and disables the drive after a short delay.
+- **Key Features**:
+  - Communicates with the Simucube controller using HIDAPI.
+  - Configures the IONI drive for further operation.
+  - Activates the Simucube controller for use with the SimpleMotion V2 library.
 
-- **Usage:**
-  1. Compile the program using the provided `Makefile`.
-  2. Execute the binary (`./smv2_control_demo`) to observe the motor behavior.
+- **Usage**:
+  1. Connect the Simucube to your computer via USB (X3 port).
+  2. Compile the program using the provided `Makefile`.
+  3. Run the binary (`./enable_ioni_configurator`) to put the Simucube into IONI configuration mode.
 
 ---
 
-### 2. **Simucube-Ioni-Activate**
-- **Description:**
-  Demonstrates how to configure and enable the IONI drive on a Simucube controller using HIDAPI. This example shows how to communicate with the controller and activate the drive.
+### 2. **SimplemotionV2-Speed-Setpoint**
+- **Description**:  
+  This example demonstrates how to control the velocity of a motor connected to the Simucube controller using the **SimpleMotion V2 library**. The program enables the motor, sets the control mode to velocity, and sends a speed setpoint.
 
-- **Key Features:**
-  - Uses HIDAPI for USB communication.
-  - Sends configuration commands to activate the IONI drive.
-  - A starting point for further drive configuration tasks.
+- **Key Features**:
+  - Reads and checks the Simucube for fault statuses.
+  - Enables the motor drive.
+  - Sets the control mode to velocity.
+  - Sends a velocity setpoint (e.g., 500) to spin the motor.
+  - Stops the motor and disables the drive after a short delay.
 
-- **Usage:**
-  1. Compile the program using the provided `Makefile`.
-  2. Execute the binary (`./enable_ioni_configurator`) to activate the drive.
+- **Usage**:
+  1. Connect the Simucube to your computer via USB (X4 port).
+  2. Compile the program using the provided `Makefile`.
+  3. Run the binary (`./smv2_control_demo`) to control the motor.
 
 ---
 
 ## Dependencies
 
 Both examples depend on the following:
-- **SimpleMotion V2 library**: Required for communication with the Simucube controller.
-- **HIDAPI library** (Simucube-Ioni-Activate only): For USB HID communication.
 
-Ensure that:
-1. SimpleMotion V2 headers and shared libraries are available in the project directories or system paths.
-2. HIDAPI is installed and accessible for Simucube-Ioni-Activate.
+- **[SimpleMotion V2 Library](https://granitedevices.com/wiki/SimpleMotion)**:  
+  Developed by Granite Devices, this library is used for communication with the Simucube controller. Make sure the library headers and shared libraries are available in the project directories or system paths.
+  
+- **HIDAPI Library**:  
+  Used in the **Simucube-Ioni-Activate** example for USB HID communication.
+
+To set up these dependencies:
+- Install HIDAPI (e.g., via Homebrew on macOS: `brew install hidapi`).
+- Include the SimpleMotion V2 library in the project folder or ensure it is installed system-wide.
+
+---
+
+## Acknowledgments
+
+These examples utilize the **SimpleMotion V2 library**, developed and maintained by **Granite Devices**. For more information, visit the [SimpleMotion Wiki](https://granitedevices.com/wiki/SimpleMotion).
 
 ---
 
 ## How to Build and Run
 
-1. **Compile**:
-   - Navigate to the project directory (`SimplemotionV2-Speed-Setpoint` or `Simucube-Ioni-Activate`).
-   - Run `make` to compile the program.
+### Building:
+1. Navigate to the respective project directory (`Simucube-Ioni-Activate` or `SimplemotionV2-Speed-Setpoint`).
+2. Run `make` to compile the program.
 
-2. **Run**:
-   - Execute the compiled binary (e.g., `./smv2_control_demo` or `./enable_ioni_configurator`).
+### Running:
+- For **Simucube-Ioni-Activate**, execute:  
+  ```bash
+  ./enable_ioni_configurator
 
----
-
-## Notes
-- These examples are designed for macOS but can be adapted to other platforms by adjusting the library paths in the `Makefile`.
-- Ensure the Simucube controller and motors are correctly connected and configured before running the programs.
-
-Feel free to explore, modify, and use these examples as a reference for your own Simucube-based projects!
-
----
