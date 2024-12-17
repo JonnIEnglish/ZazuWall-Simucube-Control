@@ -1,0 +1,17 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build IONI Configurator",
+            "type": "shell",
+            "command": "make",
+            "args": ["-C", "Simucube-Ioni-Activate"]
+        },
+        {
+            "label": "Build SimpleMotion Example",
+            "type": "shell",
+            "command": "make",
+            "args": ["-C", "Simucube-SimplemotionV2-Example"]
+        }
+    ]
+}
