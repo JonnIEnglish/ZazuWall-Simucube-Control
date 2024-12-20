@@ -2,15 +2,63 @@
 #include <unistd.h> // For sleep()
 #include "simplemotion.h"
 #include "simplemotion_defs.h"
+#include <dirent.h> // For listing devices
+#include <string.h> // For string comparisons
+
+// Function to list serial ports
+void listSerialPorts(char ports[][256], int *portCount) {
+    struct dirent *entry;
+    DIR *dir = opendir("/dev");
+
+    if (dir == NULL) {
+        perror("Failed to open /dev");
+        return;
+    }
+
+    *portCount = 0; // Initialize port count
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strstr(entry->d_name, "ttyUSB") || strstr(entry->d_name, "ttyACM")) {
+            snprintf(ports[*portCount], 256, "/dev/%s", entry->d_name);
+            (*portCount)++;
+        }
+    }
+
+    closedir(dir);
+}
 
 int main() {
-    const char* portname = "/dev/cu.usbserial-D30A763D";
-    smbus handle = smOpenBus(portname);
-    if (handle == -1) {
-        fprintf(stderr, "Failed to open SM bus on %s\n", portname);
+    char ports[10][256]; // Array to store up to 10 serial port paths
+    int portCount = 0;
+
+    // List available serial ports
+    listSerialPorts(ports, &portCount);
+
+    if (portCount == 0) {
+        printf("No serial ports found.\n");
         return 1;
     }
-    printf("SM bus opened successfully on %s\n", portname);
+
+    printf("Available serial ports:\n");
+    for (int i = 0; i < portCount; i++) {
+        printf("%s\n", ports[i]);
+    }
+
+    // Try each port until one opens successfully
+    smbus handle = -1;
+    for (int i = 0; i < portCount; i++) {
+        printf("Trying port: %s\n", ports[i]);
+        handle = smOpenBus(ports[i]);
+        if (handle != -1) {
+            printf("SM bus opened successfully on %s\n", ports[i]);
+            break;
+        }
+    }
+
+    if (handle == -1) {
+        fprintf(stderr, "Failed to open SM bus on any port.\n");
+        return 1;
+    }
 
     // Check for faults
     smint32 faultStatus = 0;
@@ -20,32 +68,18 @@ int main() {
         smCloseBus(handle);
         return 1;
     }
+
     if (faultStatus != 0) {
-        fprintf(stderr, "Device reports faults: %d\n", faultStatus);
-
-        // Attempt to clear faults
+        printf("Device reports faults: %d\n", faultStatus);
         status = smSetParameter(handle, 1, SMP_CONTROL_BITS1, SMP_CB1_CLEARFAULTS);
-        if (status != SM_OK) {
+        if (status == SM_OK) {
+            printf("Faults cleared.\n");
+        } else {
             fprintf(stderr, "Failed to clear faults.\n");
-            smCloseBus(handle);
-            return 1;
         }
-        printf("Faults cleared.\n");
-
-        // Check faults again
-        status = smRead1Parameter(handle, 1, SMP_FAULTS, &faultStatus);
-        if (status != SM_OK) {
-            fprintf(stderr, "Failed to read fault status after clearing.\n");
-            smCloseBus(handle);
-            return 1;
-        }
-        if (faultStatus != 0) {
-            fprintf(stderr, "Device still reports faults: %d\n", faultStatus);
-            smCloseBus(handle);
-            return 1;
-        }
+    } else {
+        printf("No faults reported.\n");
     }
-    printf("No faults reported.\n");
 
     // Enable the drive
     status = smSetParameter(handle, 1, SMP_CONTROL_BITS1, SMP_CB1_ENABLE);
@@ -65,7 +99,7 @@ int main() {
     }
     printf("Control mode set to velocity.\n");
 
-    // Send setpoint of 500
+    // Send a velocity setpoint
     smint32 setpoint = 500; // Adjust based on your configuration
     status = smSetParameter(handle, 1, SMP_ABSOLUTE_SETPOINT, setpoint);
     if (status != SM_OK) {
