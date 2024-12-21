@@ -1,38 +1,13 @@
 import time
-import threading
-import subprocess
-from smbus2 import SMBus
 import ctypes
-
-# I2C Configuration
-I2C_BUS = 1
-LCD_I2C_ADDR = 0x27
-LCD_WIDTH = 16  # Max characters per line
-
-# ADC Configuration
-ADC_CHANNEL = 0
-ADC_PATH = f"/sys/bus/iio/devices/iio:device0/in_voltage{ADC_CHANNEL}_raw"
-
-# Button Calibration Thresholds
-button_thresholds = {
-    "button_1": 5,     # Decrease incline
-    "button_2": 540,   # Increase speed
-    "button_3": 1807,  # Increase incline
-    "button_4": 1196,  # Decrease speed
-    "button_5": 2615,  # Toggle Motor
-    "no_press": 3507,  # No button pressed
-}
-
-# Shared Variables
-incline_angle = 0  # Incline angle in degrees
-speed = 10         # Default speed in m/min
-auto_mode = False  # Auto mode state
-motor_running = False
-shared_lock = threading.Lock()  # Lock for thread-safe variable access
+import subprocess
+from collections import deque
 
 # Simucube Configuration
 IONI_SPEED_BASE = 1000  # Speed setpoint for 10 m/min
 IONI_SPEED_STEP = 200   # Speed increment per 1 m/min
+TORQUE_WINDOW_SIZE = 50  # Number of samples for rolling average
+POLLING_INTERVAL = 0.01  # Polling interval in seconds
 
 # Load the shared Simucube library
 libsimucube = ctypes.CDLL("/home/jonno/ZazuWall-Simucube-Control/le-Potato-Control/Ioni_Functions/libsimucube.so")
@@ -46,147 +21,91 @@ libsimucube.clearFaultsAndInitialize.restype = ctypes.c_int
 libsimucube.clearFaultsAndInitialize.argtypes = [ctypes.c_int]
 libsimucube.setSpeed.restype = ctypes.c_int
 libsimucube.setSpeed.argtypes = [ctypes.c_int, ctypes.c_int]
+libsimucube.getTorque.restype = ctypes.c_int
+libsimucube.getTorque.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
 
-# Enable I2C Overlays
-def enable_i2c_overlay(overlay_name):
+def activate_ioni():
+    """Activate IONI mode."""
     try:
-        result = subprocess.run(['ldto', 'status'], capture_output=True, text=True)
-        if overlay_name in result.stdout:
-            print(f"Overlay {overlay_name}: already exists")
-            return
-        subprocess.check_call(['sudo', 'ldto', 'enable', overlay_name])
-        print(f"Successfully enabled {overlay_name} overlay.")
+        result = subprocess.run(
+            ["./enable_ioni_configurator"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        print("Output from IONI activation:")
+        print(result.stdout)
     except subprocess.CalledProcessError as e:
-        print(f"Error enabling I2C overlays: {e}")
+        print("Error activating IONI:")
+        print(e.stderr)
+        raise Exception("IONI activation failed.")
 
-# LCD Functions
-def lcd_toggle_enable(bus, bits):
-    bus.write_byte(LCD_I2C_ADDR, bits | 0b00000100)
-    time.sleep(0.0005)
-    bus.write_byte(LCD_I2C_ADDR, bits & ~0b00000100)
-    time.sleep(0.0005)
+def enable_motor(handle):
+    """Enable the motor."""
+    if libsimucube.clearFaultsAndInitialize(handle.value) == 0:
+        print("Motor enabled successfully.")
+    else:
+        print("Failed to enable the motor.")
 
-def lcd_send_byte(bus, bits, mode):
-    high_bits = mode | (bits & 0xF0) | 0x08  # Backlight ON
-    low_bits = mode | ((bits << 4) & 0xF0) | 0x08
-    bus.write_byte(LCD_I2C_ADDR, high_bits)
-    lcd_toggle_enable(bus, high_bits)
-    bus.write_byte(LCD_I2C_ADDR, low_bits)
-    lcd_toggle_enable(bus, low_bits)
+def disable_motor(handle):
+    """Disable the motor."""
+    if libsimucube.setSpeed(handle.value, 0) == 0:
+        print("Motor disabled (speed set to 0).")
+    else:
+        print("Failed to disable the motor.")
 
-def lcd_init(bus):
-    lcd_send_byte(bus, 0x33, 0)
-    lcd_send_byte(bus, 0x32, 0)
-    lcd_send_byte(bus, 0x06, 0)
-    lcd_send_byte(bus, 0x0C, 0)
-    lcd_send_byte(bus, 0x28, 0)
-    lcd_send_byte(bus, 0x01, 0)
-    time.sleep(0.005)
-
-def lcd_display_string(bus, message, line):
-    if line == 1:
-        lcd_send_byte(bus, 0x80, 0)
-    elif line == 2:
-        lcd_send_byte(bus, 0xC0, 0)
-    for char in message.ljust(LCD_WIDTH, " "):
-        lcd_send_byte(bus, ord(char), 1)
-
-# ADC Functions
-def read_adc():
-    try:
-        with open(ADC_PATH, "r") as adc_file:
-            return int(adc_file.read().strip())
-    except Exception as e:
-        print(f"Error reading ADC: {e}")
-        return None
-
-def detect_button(adc_value, thresholds):
-    closest_button = None
-    closest_diff = float("inf")
-    for button, threshold in thresholds.items():
-        diff = abs(adc_value - threshold)
-        if diff < closest_diff:
-            closest_button = button
-            closest_diff = diff
-    return closest_button
-
-# Simucube Functions
-def update_simucube_speed(handle):
-    setpoint = IONI_SPEED_BASE + (speed - 10) * IONI_SPEED_STEP
-    libsimucube.setSpeed(handle, setpoint)
-
-# Button Thread
-def button_checking_thread(handle):
-    global incline_angle, speed, auto_mode, motor_running
-    last_detected = None
+def monitor_torque(handle):
+    """Monitor torque using a rolling average and control motor state."""
+    torque_window = deque(maxlen=TORQUE_WINDOW_SIZE)
+    motor_running = False
 
     while True:
-        adc_value = read_adc()
-        if adc_value is not None:
-            detected_button = detect_button(adc_value, button_thresholds)
+        torque_value = ctypes.c_int()
+        if libsimucube.getTorque(handle, ctypes.byref(torque_value)) == 0:
+            torque_window.append(torque_value.value)
+            rolling_avg_torque = sum(torque_window) / len(torque_window)
 
-            if detected_button != last_detected:
-                last_detected = detected_button
+            print(f"Raw Torque: {torque_value.value}, Rolling Avg Torque: {rolling_avg_torque:.2f}")
 
-                with shared_lock:
-                    if detected_button == "button_1":
-                        incline_angle = max(incline_angle - 5, -45)
-                    elif detected_button == "button_2":
-                        speed = min(speed + 1, 20)
-                        update_simucube_speed(handle)
-                    elif detected_button == "button_3":
-                        incline_angle = min(incline_angle + 5, 15)
-                    elif detected_button == "button_4":
-                        speed = max(speed - 1, 5)
-                        update_simucube_speed(handle)
-                    elif detected_button == "button_5":
-                        motor_running = not motor_running
-                        if motor_running:
-                            update_simucube_speed(handle)
-                        else:
-                            libsimucube.setSpeed(handle, 0)
-
-        time.sleep(0.05)
-
-# LCD Thread
-def lcd_updating_thread():
-    with SMBus(I2C_BUS) as bus:
-        lcd_init(bus)
-
-        while True:
-            with shared_lock:
-                speed_text = f"Speed: {speed:02} m/min"
-                incline_text = f"Tilt:   {incline_angle:+03} deg"
-
-            line_1 = speed_text.center(LCD_WIDTH)
-            line_2 = incline_text.center(LCD_WIDTH)
-            lcd_display_string(bus, line_1, 1)
-            lcd_display_string(bus, line_2, 2)
-            time.sleep(0.5)
+            if rolling_avg_torque < 0 and not motor_running:
+                print("Torque is negative. Turning motor ON...")
+                motor_running = True
+                setpoint = IONI_SPEED_BASE  # Set speed to 10 m/min
+                libsimucube.setSpeed(handle.value, setpoint)
+            elif rolling_avg_torque >= 0 and motor_running:
+                print("Torque is zero or positive. Turning motor OFF...")
+                motor_running = False
+                disable_motor(handle)
+        else:
+            print("Failed to read torque.")
+        
+        time.sleep(POLLING_INTERVAL)
 
 # Main Function
 if __name__ == "__main__":
     handle = ctypes.c_int()
     try:
-        enable_i2c_overlay('i2c-ao')
-        enable_i2c_overlay('i2c-b')
+        # Activate IONI
+        activate_ioni()
 
+        # Open Simucube
         if libsimucube.openSimucube(ctypes.byref(handle)) == 0:
             print("Simucube opened successfully.")
-            libsimucube.clearFaultsAndInitialize(handle.value)
 
-            button_thread = threading.Thread(target=button_checking_thread, args=(handle,), daemon=True)
-            lcd_thread = threading.Thread(target=lcd_updating_thread, daemon=True)
+            # Clear faults and initialize
+            print("Clearing faults and initializing Simucube...")
+            disable_motor(handle)  # Disable first for clean initialization
+            enable_motor(handle)   # Enable after clearing faults
 
-            button_thread.start()
-            lcd_thread.start()
+            # Start torque monitoring
+            print("Starting torque monitoring...")
+            monitor_torque(handle)
 
-            while True:
-                time.sleep(1)
         else:
             print("Failed to open Simucube.")
-
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
+        disable_motor(handle)  # Ensure motor is disabled on exit
         libsimucube.closeSimucube(handle.value)
+        print("Simucube closed.")

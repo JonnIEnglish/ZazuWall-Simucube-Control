@@ -4,7 +4,7 @@ def activate_ioni():
     try:
         # Call the binary
         result = subprocess.run(
-            ["./enable_ioni_configurator"],
+            ["/home/jonno/ZazuWall-Simucube-Control/le-Potato-Control/enable_ioni_configurator"],
             capture_output=True,
             text=True,
             check=True
