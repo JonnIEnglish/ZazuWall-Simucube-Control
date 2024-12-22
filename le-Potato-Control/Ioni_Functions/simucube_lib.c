@@ -101,4 +101,17 @@ extern "C" {
         printf("Torque read: %d\n", *torque);
         return 0;
     }
+
+    // Get Faults
+    int getFaults(smbus smHandle, int *faultStatus) {
+        smint32 faults = 0;
+        SM_STATUS status = smRead1Parameter(smHandle, 1, SMP_FAULTS, &faults);
+        if (status != SM_OK) {
+            fprintf(stderr, "Failed to read fault status.\n");
+            return -1;
+        }
+        *faultStatus = (int)faults;
+        printf("Faults read: %d\n", *faultStatus);
+        return 0;
+    }
 }

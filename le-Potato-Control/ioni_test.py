@@ -20,6 +20,21 @@ libsimucube.setSpeed.argtypes = [ctypes.c_int, ctypes.c_int]
 libsimucube.getTorque.restype = ctypes.c_int
 libsimucube.getTorque.argtypes = [ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
 
+# Hold motor speed for a specific duration
+def hold_motor_speed(handle, speed, duration):
+    """Set and hold motor speed for the given duration."""
+    set_speed_result = libsimucube.setSpeed(handle.value, speed)
+    if set_speed_result == 0:
+        print(f"Speed set to {speed}. Holding for {duration} seconds.")
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            torque = ctypes.c_int()
+            if libsimucube.getTorque(handle.value, ctypes.byref(torque)) == 0:
+                print(f"Torque: {torque.value} Nm")
+            time.sleep(0.1)  # Polling delay
+    else:
+        print(f"Failed to set speed to {speed}. Error code: {set_speed_result}")
+
 # Test the functions
 handle = ctypes.c_int()
 
@@ -29,19 +44,17 @@ if libsimucube.openSimucube(ctypes.byref(handle)) == 0:
     if libsimucube.clearFaultsAndInitialize(handle.value) == 0:
         print("Faults cleared and motor initialized.")
 
-        for speed in range(500, 2000, 100):
-            if libsimucube.setSpeed(handle.value, speed) == 0:
-                print(f"Speed set to {speed}.")
+        speed = 500  # Speed setpoint
+        duration = 5  # Duration to hold the speed
 
-            # Wait for 5 seconds
-            time.sleep(5)
+        # Hold the motor at the specified speed for the duration
+        hold_motor_speed(handle, speed, duration)
 
-            torque = ctypes.c_int()
-            if libsimucube.getTorque(handle.value, ctypes.byref(torque)) == 0:
-                print(f"Torque: {torque.value} Nm")
-
+        # Stop the motor
         if libsimucube.setSpeed(handle.value, 0) == 0:
             print("Motor stopped (speed set to 0).")
+        else:
+            print("Failed to stop the motor.")
 
     libsimucube.closeSimucube(handle.value)
     print("Simucube closed.")
