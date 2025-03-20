@@ -5,6 +5,10 @@ import subprocess
 import ctypes
 from collections import deque
 
+# Import utilities from utils package
+from utils.i2c_enable import enable_i2c_overlays
+from utils.lcd_control import lcd_init, lcd_display_string, lcd_send_byte
+
 # I2C Configuration
 I2C_BUS = 1
 LCD_I2C_ADDR = 0x27
@@ -36,7 +40,7 @@ current_speed = SPEED_SETPOINT
 shared_lock = threading.Lock()
 
 # Load the shared library
-libsimucube = ctypes.CDLL("/home/jonno/ZazuWall-Simucube-Control/le-Potato-Control/Ioni_Functions/libsimucube.so")
+libsimucube = ctypes.CDLL("lib/libsimucube.so")
 
 # Define function signatures
 libsimucube.openSimucube.restype = ctypes.c_int
@@ -56,7 +60,7 @@ def activate_ioni():
     try:
         # Call the binary
         result = subprocess.run(
-            ["/home/jonno/ZazuWall-Simucube-Control/le-Potato-Control/enable_ioni_configurator"],
+            ["python/enable_ioni_configurator"],
             capture_output=True,
             text=True,
             check=True
@@ -73,31 +77,6 @@ def lcd_toggle_enable(bus, bits):
     time.sleep(0.0005)
     bus.write_byte(LCD_I2C_ADDR, bits & ~0b00000100)
     time.sleep(0.0005)
-
-def lcd_send_byte(bus, bits, mode):
-    high_bits = mode | (bits & 0xF0) | 0x08
-    low_bits = mode | ((bits << 4) & 0xF0) | 0x08
-    bus.write_byte(LCD_I2C_ADDR, high_bits)
-    lcd_toggle_enable(bus, high_bits)
-    bus.write_byte(LCD_I2C_ADDR, low_bits)
-    lcd_toggle_enable(bus, low_bits)
-
-def lcd_init(bus):
-    lcd_send_byte(bus, 0x33, 0)
-    lcd_send_byte(bus, 0x32, 0)
-    lcd_send_byte(bus, 0x06, 0)
-    lcd_send_byte(bus, 0x0C, 0)
-    lcd_send_byte(bus, 0x28, 0)
-    lcd_send_byte(bus, 0x01, 0)
-    time.sleep(0.005)
-
-def lcd_display_string(bus, message, line):
-    if line == 1:
-        lcd_send_byte(bus, 0x80, 0)
-    elif line == 2:
-        lcd_send_byte(bus, 0xC0, 0)
-    for char in message.ljust(LCD_WIDTH, " "):
-        lcd_send_byte(bus, ord(char), 1)
 
 # ADC Functions
 def read_adc():

@@ -4,24 +4,11 @@ import subprocess
 from collections import deque
 import gpiod
 
-# Activate IONI
-def activate_ioni():
-    try:
-        # Call the binary
-        result = subprocess.run(
-            ["/home/jonno/ZazuWall-Simucube-Control/le-Potato-Control/enable_ioni_configurator"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        print("Output from IONI activation:")
-        print(result.stdout)
-    except subprocess.CalledProcessError as e:
-        print("Error activating IONI:")
-        print(e.stderr)
+# Import utility functions
+from utils.ioni_enable import activate_ioni
 
 # Load the shared library
-libsimucube = ctypes.CDLL("/home/jonno/ZazuWall-Simucube-Control/le-Potato-Control/Ioni_Functions/libsimucube.so")
+libsimucube = ctypes.CDLL("lib/libsimucube.so")
 
 # Define function signatures
 libsimucube.openSimucube.restype = ctypes.c_int
