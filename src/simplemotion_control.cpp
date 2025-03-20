@@ -1,9 +1,9 @@
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <dirent.h>
 #include "simplemotion.h"
 #include "simplemotion_defs.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <dirent.h> // For listing devices
 
 extern "C" {
 
@@ -26,7 +26,7 @@ extern "C" {
     }
 
     // Open Simucube
-    int openSimucube(smbus *smHandle) {
+    int openSimucube(smbus* smHandle) {
         char ports[10][256];
         int portCount = 0;
         listSerialPorts(ports, &portCount);
@@ -90,7 +90,7 @@ extern "C" {
     }
 
     // Get Torque
-    int getTorque(smbus smHandle, int *torque) {
+    int getTorque(smbus smHandle, int* torque) {
         smint32 torqueValue = 0;
         SM_STATUS status = smRead1Parameter(smHandle, 1, SMP_ACTUAL_TORQUE, &torqueValue);
         if (status != SM_OK) {
@@ -103,7 +103,7 @@ extern "C" {
     }
 
     // Get Faults
-    int getFaults(smbus smHandle, int *faultStatus) {
+    int getFaults(smbus smHandle, int* faultStatus) {
         smint32 faults = 0;
         SM_STATUS status = smRead1Parameter(smHandle, 1, SMP_FAULTS, &faults);
         if (status != SM_OK) {
@@ -114,4 +114,4 @@ extern "C" {
         printf("Faults read: %d\n", *faultStatus);
         return 0;
     }
-}
+} // end extern "C"
