@@ -1,58 +1,48 @@
 import time
 import gpiod
 
-# GPIO Configuration for Stepper Motor
-PULSE_PIN = 23  # GPIO23 (Physical pin 16)
-DIR_PIN = 18    # GPIO18 (Physical pin 12)
-GPIO_CHIP = "/dev/gpiochip1"  # GPIO chip device (updated)
+# Verified Le Potato GPIO Configuration (Source [1][7])
+PULSE_PIN = 93  # GPIOX_14 (Physical pin 16)
+DIR_PIN = 94    # GPIOX_15 (Physical pin 18)
+GPIO_CHIP = "gpiochip1"
 
-# Stepper Motor Pulse Delay
-PULSE_DELAY = 0.001  # Delay between pulses (adjust for speed)
+# Motor Configuration
+STEPS = 30000
+PULSE_DELAY = 0.0001  # 0.5ms pulse width (adjust if needed)
 
-# GPIO Initialization
 def setup_gpio():
-    try:
-        chip = gpiod.Chip(GPIO_CHIP)
-        print(f"GPIO chip detected: {GPIO_CHIP}")
+    chip = gpiod.Chip(GPIO_CHIP)
+    pulse_line = chip.get_line(PULSE_PIN)
+    dir_line = chip.get_line(DIR_PIN)
+    
+    pulse_line.request(consumer="stepper", type=gpiod.LINE_REQ_DIR_OUT)
+    dir_line.request(consumer="stepper", type=gpiod.LINE_REQ_DIR_OUT)
+    
+    return chip, pulse_line, dir_line
 
-        pulse_line = chip.get_line(PULSE_PIN)
-        dir_line = chip.get_line(DIR_PIN)
-
-        pulse_line.request(consumer="StepperMotor", type=gpiod.LINE_REQ_DIR_OUT)
-        dir_line.request(consumer="StepperMotor", type=gpiod.LINE_REQ_DIR_OUT)
-
-        print(f"Successfully configured GPIO lines: PULSE_PIN={PULSE_PIN}, DIR_PIN={DIR_PIN}")
-        return chip, pulse_line, dir_line
-
-    except OSError as e:
-        print(f"Error during GPIO setup: {e}")
-        raise
-
-# GPIO Functions for Stepper Motor
-def step_motor(pulse_line, dir_line, direction, steps=1):
-    """Step the motor in the given direction for a number of steps."""
-    dir_line.set_value(direction)  # Set direction
+def move_motor(pulse, direction, dir_value, steps):
+    direction.set_value(dir_value)
     for _ in range(steps):
-        pulse_line.set_value(1)  # Pulse HIGH
+        pulse.set_value(1)
         time.sleep(PULSE_DELAY)
-        pulse_line.set_value(0)  # Pulse LOW
+        pulse.set_value(0)
         time.sleep(PULSE_DELAY)
 
-# Main Function
-if __name__ == "__main__":
+def main():
+    chip, pulse, direction = setup_gpio()
+    
     try:
-        # Setup GPIO
-        chip, pulse_line, dir_line = setup_gpio()
-
-        # Test motor movement
-        print("Testing stepper motor: moving forward 50 steps")
-        step_motor(pulse_line, dir_line, 1, 50)  # Move forward
-
-        print("Testing stepper motor: moving backward 50 steps")
-        step_motor(pulse_line, dir_line, 0, 50)  # Move backward
-
-    except KeyboardInterrupt:
-        print("Exiting...")
+        print("Moving left steps")
+        move_motor(pulse, direction, 0, STEPS)
+        
+        time.sleep(1)  # Pause between movements
+        
+        # print("Moving right 100 steps")
+        # move_motor(pulse, direction, 1, STEPS)
+        
     finally:
-        if 'chip' in locals():
-            chip.close()
+        chip.close()
+        print("GPIO cleanup complete")
+
+if __name__ == "__main__":
+    main()
