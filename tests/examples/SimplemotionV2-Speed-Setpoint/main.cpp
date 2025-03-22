@@ -1,9 +1,36 @@
 #include <stdio.h>
-#include <unistd.h> // For sleep()
+#include <unistd.h>
+#include <termios.h>
+#include <fcntl.h>
 #include "simplemotion.h"
 #include "simplemotion_defs.h"
-#include <dirent.h> // For listing devices
-#include <string.h> // For string comparisons
+#include <dirent.h>
+#include <string.h>
+
+// Function to make stdin non-blocking
+void makeStdinNonBlocking() {
+    int flags = fcntl(STDIN_FILENO, F_GETFL);
+    fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+}
+
+// Function to check if a key was pressed
+bool isKeyPressed() {
+    char buf[1];
+    return read(STDIN_FILENO, buf, 1) > 0;
+}
+
+// Function to perform emergency stop
+void emergencyStop(smbus handle) {
+    printf("\nEMERGENCY STOP TRIGGERED!\n");
+    
+    // Immediately set velocity to 0
+    smSetParameter(handle, 1, SMP_ABSOLUTE_SETPOINT, 0);
+    
+    // Disable the drive
+    smSetParameter(handle, 1, SMP_CONTROL_BITS1, 0);
+    
+    printf("Motor stopped and drive disabled.\n");
+}
 
 // Function to list serial ports
 void listSerialPorts(char ports[][256], int *portCount) {
@@ -27,9 +54,21 @@ void listSerialPorts(char ports[][256], int *portCount) {
     closedir(dir);
 }
 
+// Function to decode fault codes
+void decodeFault(smint32 faultCode) {
+    if (faultCode & 0x481001) {
+        printf("Watchdog timeout detected (Communication error)\n");
+    }
+    // Add other fault code checks as needed
+}
+
 int main() {
     char ports[10][256]; // Array to store up to 10 serial port paths
     int portCount = 0;
+
+    // Make stdin non-blocking for key detection
+    makeStdinNonBlocking();
+    printf("Press any key for emergency stop!\n");
 
     // List available serial ports
     listSerialPorts(ports, &portCount);
@@ -71,14 +110,13 @@ int main() {
 
     if (faultStatus != 0) {
         printf("Device reports faults: %d\n", faultStatus);
+        decodeFault(faultStatus);
         status = smSetParameter(handle, 1, SMP_CONTROL_BITS1, SMP_CB1_CLEARFAULTS);
         if (status == SM_OK) {
             printf("Faults cleared.\n");
         } else {
             fprintf(stderr, "Failed to clear faults.\n");
         }
-    } else {
-        printf("No faults reported.\n");
     }
 
     // Enable the drive
@@ -100,7 +138,7 @@ int main() {
     printf("Control mode set to velocity.\n");
 
     // Send a velocity setpoint
-    smint32 setpoint = 500; // Adjust based on your configuration
+    smint32 setpoint = 10; // Adjust based on your configuration
     status = smSetParameter(handle, 1, SMP_ABSOLUTE_SETPOINT, setpoint);
     if (status != SM_OK) {
         fprintf(stderr, "Failed to send velocity setpoint.\n");
@@ -109,8 +147,56 @@ int main() {
     }
     printf("Velocity setpoint of %d sent. Motor should be turning now...\n", setpoint);
 
-    // Wait for a while to observe the motor turning
-    sleep(5);
+    // Run for 5 seconds while checking for faults, refreshing watchdog, reading torque, and monitoring for keypress
+    for (int i = 0; i < 500; i++) { // 50 iterations of 100ms = 5 seconds
+        usleep(100000);  // Sleep for 100ms between communications
+        
+        // Check for emergency stop
+        if (isKeyPressed()) {
+            emergencyStop(handle);
+            smCloseBus(handle);
+            return 0;
+        }
+        
+        // Read torque
+        smint32 torqueValue = 0;
+        status = smRead1Parameter(handle, 1, SMP_ACTUAL_TORQUE, &torqueValue);
+        if (status != SM_OK) {
+            fprintf(stderr, "Failed to read torque.\n");
+        } else {
+            printf("Current torque: %d\n", torqueValue);
+        }
+        
+        // Refresh watchdog by reading a parameter
+        smint32 dummy;
+        status = smRead1Parameter(handle, 1, SMP_FAULTS, &dummy);
+        if (status != SM_OK) {
+            fprintf(stderr, "Failed to refresh watchdog.\n");
+            smCloseBus(handle);
+            return 1;
+        }
+        
+        // Check for faults
+        smint32 currentFaults = 0;
+        status = smRead1Parameter(handle, 1, SMP_FAULTS, &currentFaults);
+        if (status != SM_OK) {
+            fprintf(stderr, "Failed to read fault status during operation.\n");
+            smCloseBus(handle);
+            return 1;
+        }
+        
+        if (currentFaults != 0) {
+            printf("Fault detected during operation! Fault code: %d\n", currentFaults);
+            decodeFault(currentFaults);
+            emergencyStop(handle);
+            smCloseBus(handle);
+            return 1;
+        }
+        
+        if (i % 10 == 0) { // Print status every second
+            printf("Running... No faults detected (Second %d/5)\n", i/10 + 1);
+        }
+    }
 
     // Stop the motor
     status = smSetParameter(handle, 1, SMP_ABSOLUTE_SETPOINT, 0);
