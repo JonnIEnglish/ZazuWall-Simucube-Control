@@ -33,7 +33,7 @@ def main():
     
     try:
         print("Moving left steps")
-        move_motor(pulse, direction, 1, STEPS)
+        move_motor(pulse, direction, 0, STEPS)
         
         time.sleep(1)  # Pause between movements
         

@@ -33,10 +33,10 @@ from python.core.ioni_config import activate_ioni
 from python.core.set_speed import SpeedController
 
 # Constants
-TORQUE_THRESHOLD = 100
+TORQUE_THRESHOLD = 500
 SAMPLE_INTERVAL = 0.1  # seconds between torque readings
-WINDOW_SIZE = 5        # size of rolling average window
-DEBOUNCE_TIME = 0.2    # seconds before allowing another speed change
+WINDOW_SIZE = 10        # size of rolling average window
+DEBOUNCE_TIME = 0.0    # seconds before allowing another speed change
 SPEED_INCREMENT = 200  # RPM to increase/decrease with button press
 DEFAULT_SPEED = 2000   # Default speed when torque is below threshold
 
