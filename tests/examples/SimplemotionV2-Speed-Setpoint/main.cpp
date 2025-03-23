@@ -137,17 +137,17 @@ int main() {
     }
     printf("Control mode set to velocity.\n");
 
-    // Send a velocity setpoint
-    smint32 setpoint = 10; // Adjust based on your configuration
+    // Initial velocity setpoint is 0
+    smint32 setpoint = 0;
     status = smSetParameter(handle, 1, SMP_ABSOLUTE_SETPOINT, setpoint);
     if (status != SM_OK) {
         fprintf(stderr, "Failed to send velocity setpoint.\n");
         smCloseBus(handle);
         return 1;
     }
-    printf("Velocity setpoint of %d sent. Motor should be turning now...\n", setpoint);
+    printf("Initial velocity setpoint of %d sent.\n", setpoint);
 
-    // Run for 5 seconds while checking for faults, refreshing watchdog, reading torque, and monitoring for keypress
+    // Run while checking for faults, refreshing watchdog, reading torque, and monitoring for keypress
     for (int i = 0; i < 500; i++) { // 50 iterations of 100ms = 5 seconds
         usleep(100000);  // Sleep for 100ms between communications
         
@@ -165,6 +165,18 @@ int main() {
             fprintf(stderr, "Failed to read torque.\n");
         } else {
             printf("Current torque: %d\n", torqueValue);
+            
+            // Set speed based on torque value
+            smint32 newSetpoint = (torqueValue < 200) ? 2000 : 0;
+            if (newSetpoint != setpoint) {
+                setpoint = newSetpoint;
+                status = smSetParameter(handle, 1, SMP_ABSOLUTE_SETPOINT, setpoint);
+                if (status != SM_OK) {
+                    fprintf(stderr, "Failed to update velocity setpoint.\n");
+                } else {
+                    printf("Updated velocity setpoint to %d based on torque\n", setpoint);
+                }
+            }
         }
         
         // Refresh watchdog by reading a parameter
