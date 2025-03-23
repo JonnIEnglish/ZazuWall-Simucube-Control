@@ -7,8 +7,8 @@ DIR_PIN = 94    # GPIOX_15 (Physical pin 18)
 GPIO_CHIP = "gpiochip1"
 
 # Motor Configuration
-STEPS = 30000
-PULSE_DELAY = 0.0001  # 0.5ms pulse width (adjust if needed)
+STEPS = 100000 
+PULSE_DELAY = 0.00002  # 0.5ms pulse width (adjust if needed)
 
 def setup_gpio():
     chip = gpiod.Chip(GPIO_CHIP)
@@ -33,7 +33,7 @@ def main():
     
     try:
         print("Moving left steps")
-        move_motor(pulse, direction, 0, STEPS)
+        move_motor(pulse, direction, 1, STEPS)
         
         time.sleep(1)  # Pause between movements
         

@@ -148,7 +148,7 @@ int main() {
     printf("Initial velocity setpoint of %d sent.\n", setpoint);
 
     // Run while checking for faults, refreshing watchdog, reading torque, and monitoring for keypress
-    for (int i = 0; i < 500; i++) { // 50 iterations of 100ms = 5 seconds
+    for (int i = 0; i < 5000; i++) { // 50 iterations of 100ms = 5 seconds
         usleep(100000);  // Sleep for 100ms between communications
         
         // Check for emergency stop
@@ -167,7 +167,7 @@ int main() {
             printf("Current torque: %d\n", torqueValue);
             
             // Set speed based on torque value
-            smint32 newSetpoint = (torqueValue < 200) ? 2000 : 0;
+            smint32 newSetpoint = (torqueValue < 10000) ? 2000 : 0;
             if (newSetpoint != setpoint) {
                 setpoint = newSetpoint;
                 status = smSetParameter(handle, 1, SMP_ABSOLUTE_SETPOINT, setpoint);
