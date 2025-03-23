@@ -1,0 +1,16 @@
+# Makefile for compiling the speed_control library
+
+CC = g++
+CFLAGS = -Wall -fPIC -I../lib/SimpleMotionV2
+LDFLAGS = -shared -L../lib/SimpleMotionV2 -lsimplemotionv2
+
+TARGET = ../lib/libspeed_control.so
+SRC = speed_control.cpp
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
+
+clean:
+	rm -f $(TARGET)

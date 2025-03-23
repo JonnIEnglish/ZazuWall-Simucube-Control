@@ -167,7 +167,7 @@ int main() {
             printf("Current torque: %d\n", torqueValue);
             
             // Set speed based on torque value
-            smint32 newSetpoint = (torqueValue < 10000) ? 2000 : 0;
+            smint32 newSetpoint = (torqueValue < 100) ? 2000 : 0;
             if (newSetpoint != setpoint) {
                 setpoint = newSetpoint;
                 status = smSetParameter(handle, 1, SMP_ABSOLUTE_SETPOINT, setpoint);
